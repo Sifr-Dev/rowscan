@@ -1,0 +1,6 @@
+[package]
+name = "sifr-query"
+version = "0.1.0"
+edition = "2021"
+description = "Zero-dependency streaming CSV query engine — filter, select, aggregate"
+license = "MIT"
