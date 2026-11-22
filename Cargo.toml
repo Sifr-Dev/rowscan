@@ -4,3 +4,6 @@ version = "0.1.0"
 edition = "2021"
 description = "Zero-dependency streaming CSV query engine — filter, select, aggregate"
 license = "MIT"
+
+[package.metadata.release]
+pre-release = "0.x: minor versions may change the CLI/output contract; patch versions fix defects without intentional contract changes"
