@@ -1,0 +1,20 @@
+[package]
+name = "sifr-query-fuzz"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+sifr-query = { path = ".." }
+
+[[bin]]
+name = "csv_parser"
+path = "fuzz_targets/csv_parser.rs"
+test = false
+doc = false
+
+[workspace]

@@ -7,9 +7,9 @@
 
 # sifr-query
 
-zero-dependency streaming CSV query engine in ~350 lines of Rust. filter,
-select, group-by aggregates, top-N — stdin or file, CSV or Markdown out.
-no pandas, no polars, no crates.
+zero-dependency streaming CSV query engine in Rust. filter, select, group-by
+aggregates, top-N — stdin or file, CSV or Markdown out. no pandas, no polars,
+no production crates.
 
 ## usage
 
@@ -20,37 +20,63 @@ sifr-query data.csv top 10 age                     # 10 largest by a numeric col
 sifr-query data.csv filter plan = pro select country,age
 sifr-query data.csv filter country = ke group-by plan count --markdown
 cat data.csv | sifr-query count                    # stdin works too
+cat data.csv | sifr-query | head                   # closed stdout is not a panic
 ```
 
-operators: `=`, `!=`, `>`, `>=`, `<`, `<=`, `contains` (numeric when both
-sides parse as f64, string compare for `=`/`!=`/`contains` otherwise).
+operators: `=`, `!=`, `>`, `>=`, `<`, `<=`, `contains`. `=`/`!=` use numeric
+comparison when both sides are finite `f64`, exact strings otherwise. Ordered
+operators require finite numbers. `contains` is an exact, case-sensitive
+substring check. Stages compose left to right; `count` is terminal.
 
-## honest scope
+## honest scope and contract
 
-- aggregates apply to the numeric values **in the group-by column itself**
-  (e.g. `group-by age avg` works; `group-by country avg` prints 0 — country
-  is not numeric). `count` is always valid.
-- `top` sorts by a numeric column.
-- one file or stdin; no joins, no SQL parser, no persistence.
-- duplicate-header CSVs are not validated; quoted fields with embedded
-  newlines are handled (CRLF too).
+- Aggregates apply to the numeric values **in the group-by column itself**
+  (e.g. `group-by age avg` works). `group-by country avg` is an error, not a
+  zero aggregate. `count` works for any key. Groups are sorted by exact key.
+- `top` is descending numeric order, stable for ties, and retains at most N rows.
+  Invalid/NaN/infinite numbers and aggregate overflow are explicit errors.
+- Quoted commas, quotes, CR, LF, and CRLF are preserved. Strict malformed CSV,
+  invalid UTF-8, ragged rows, empty input, and invalid CLI arguments exit 2.
+  Empty physical lines are ignored; no field normalization or row repair occurs.
+- Streaming uses one record for non-buffering stages. Memory grows with distinct
+  groups or requested top N, not with total input rows. Defaults cap each field
+  at 1 MiB, each logical record at 16 MiB, and each record at 16,384 columns.
+- One file or stdin; no joins, SQL parser, persistence, delimiter inference,
+  type inference, or encoding conversion. Duplicate headers use the first match.
 
-## evidence (this machine, 2026-11-17)
+The full grammar, numeric/order rules, errors, memory caveats, and output
+contract are in [docs/contract.md](docs/contract.md). The 0.x compatibility and
+release rules are in [docs/development.md](docs/development.md). No normalization,
+automatic merge, or automatic branch deletion is part of this change.
 
-```console
-$ ./sifr-query /tmp/opencode/bench_100k.csv filter plan = pro count
-33296
-real 0m0.080s   # 100k rows, user ≈ 0.05s — ~2M rows/s single-thread
-$ cargo test --release
-test result: ok. 4 passed; 0 failed
-```
-
-## build
+## build and verify
 
 ```sh
-cargo build --release    # binary: target/release/sifr-query
-cargo test --release     # 4 parser/compare/escape/column tests
+cargo build --release                  # binary: target/release/sifr-query
+cargo fmt --all -- --check
+cargo clippy --locked --all-targets -- -D warnings
+cargo test --locked --all-targets
+cargo test --locked --release --all-targets
 ```
+
+Python 3 is needed for the independent CSV differential oracle and Unix memory
+limit regression. The suite includes malformed/empty/ragged/numeric/overflow
+and broken-pipe CLI tests, 700 randomized parser fixtures, 100 randomized
+filter/top/count/sum fixtures, and 5,000 arbitrary-byte roundtrip cases.
+
+A separate [cargo-fuzz target](fuzz/fuzz_targets/csv_parser.rs) provides
+coverage-guided ASan fuzzing on nightly Rust:
+
+```sh
+rustup toolchain install nightly --component rust-src
+cargo install cargo-fuzz --locked
+cargo +nightly fuzz run csv_parser --sanitizer address -- \
+  -max_total_time=30 -print_final_stats=1
+```
+
+See [verification and release policy](docs/development.md) for CI, sanitizer
+requirements, and local-vs-CI evidence. Version changes are intentional release
+actions; this branch leaves the package at 0.1.0.
 
 ## license
 
