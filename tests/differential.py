@@ -106,4 +106,77 @@ for index in range(100):
     assert result.returncode == 0, (index, result.stderr)
     assert result.stdout == encode(expected), (index, result.stdout, encode(expected))
 
-print(f"Python csv differential: 700 parser fixtures and 100 filter/top/group fixtures passed (seed {SEED:#x})")
+
+# Markdown is presentation output, so it is checked by decoding each emitted
+# table row back into cells with a CommonMark-faithful decoder rather than by
+# byte comparison. This is what catches a field that leaks a structural '|'.
+def decode_markdown_row(line):
+    assert line.startswith("|") and line.endswith("|"), line
+    body = line[1:-1]
+    cells, cell, index = [], [], 0
+    while index < len(body):
+        character = body[index]
+        if character == "\\" and index + 1 < len(body):
+            # A backslash escapes the following character (CommonMark).
+            cell.append(body[index + 1])
+            index += 2
+            continue
+        if character == "|":
+            cells.append("".join(cell))
+            cell = []
+            index += 1
+            continue
+        cell.append(character)
+        index += 1
+    cells.append("".join(cell))
+
+    # Every emitted cell is wrapped in exactly one leading and one trailing
+    # space; strip those two, never the field's own padding.
+    def unwrap(text):
+        assert text.startswith(" ") and text.endswith(" "), repr(text)
+        return text[1:-1].replace("<br>", "\n")
+
+    return [unwrap(text) for text in cells]
+
+
+def encode_markdown(rows):
+    # Backslash is escaped first: escaping it afterwards would double the
+    # backslash introduced for a pipe and break the field boundary.
+    def escape(field):
+        return (field.replace("\\", "\\\\").replace("|", "\\|")
+                .replace("\r", "<br>").replace("\n", "<br>"))
+
+    lines = []
+    for position, row in enumerate(rows):
+        lines.append("| " + " | ".join(escape(field) for field in row) + " |")
+        if position == 0:
+            lines.append("| " + " | ".join(["---"] * len(row)) + " |")
+    return ("\n".join(lines) + "\n").encode()
+
+
+markdown_fields = ["", "a|b", "c\\|d", "back\\slash", "trail\\", "\\", "|",
+                   "line\nfeed", "carriage\rreturn", "both\r\n", "a\\*b",
+                   "κόσμε", "🙂", "  spaced  ", "0", "-0"]
+for index in range(150):
+    width = rng.randrange(1, 6)
+    rows = [[rng.choice(markdown_fields) for _ in range(width)]
+            for _ in range(rng.randrange(1, 9))]
+    data = encode(rows)
+    result = run(data, "--markdown")
+    assert result.returncode == 0, (index, result.stderr)
+    assert result.stdout == encode_markdown(rows), (
+        index, rows, result.stdout, encode_markdown(rows),
+    )
+    decoded = [decode_markdown_row(line)
+               for line in result.stdout.decode().splitlines() if line.strip()]
+    assert all(len(row) == width for row in decoded), (
+        "markdown row shape changed", index, rows, decoded,
+    )
+    # CR and LF are both rendered as <br>, which decodes back to '\n', so the
+    # comparison normalizes CR the same way before asserting values.
+    expected = [[field.replace("\r", "\n") for field in row] for row in rows]
+    assert decoded[0] == expected[0], (index, decoded[0], expected[0])
+    assert decoded[2:] == expected[1:], (index, decoded[2:], expected[1:])
+
+print(f"Python csv differential: 700 parser fixtures, 100 filter/top/group "
+      f"fixtures, and 150 markdown fixtures passed (seed {SEED:#x})")

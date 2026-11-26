@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Fix Markdown table corruption for fields containing a backslash: the writer
+  escaped `|` without escaping the backslash that precedes it, so a field such as
+  `c\|d` emitted `\\|`, which a GFM renderer decodes as a literal backslash plus a
+  real cell delimiter. That split one field into two columns and shifted every
+  following cell in the row. Backslashes are now escaped before pipes.
+- Add a CommonMark-decoder CLI regression, an escaping unit test, a
+  backslash/pipe/newline roundtrip corpus test, and 150 randomized Markdown
+  fixtures in the Python differential oracle (which previously never exercised
+  `--markdown`).
 - Replace whole-input CSV parsing and query materialization with incremental records,
   streaming stages, sorted distinct-key aggregation, and bounded top-N heaps.
 - Preserve quoted delimiters and CR/LF/CRLF exactly; reject malformed quotes, invalid

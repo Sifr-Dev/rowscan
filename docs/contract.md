@@ -67,9 +67,13 @@ must be last and may occur once. `--markdown` may occur anywhere.
   at most `n` rows. `top 0` emits only the header.
 - `count` counts rows reaching it and emits one bare decimal integer, not CSV.
 
-Markdown output escapes pipes and renders CR/LF inside fields as `<br>`. It is
-presentation output, not a CSV roundtrip format. Markdown uses a simple `---`
-separator and does not buffer input to align columns.
+Markdown output escapes pipes and backslashes and renders CR/LF inside fields as
+`<br>`. Backslashes are escaped before pipes, so a field that already ends in a
+backslash cannot merge with the escape sequence for a following pipe and split
+the row into an extra column. It is presentation output, not a CSV roundtrip
+format; `<br>` is not escaped or reversed, so a field whose literal text is
+`<br>` is indistinguishable from a rendered newline. Markdown uses a simple
+`---` separator and does not buffer input to align columns.
 
 ## Streaming and memory limits
 

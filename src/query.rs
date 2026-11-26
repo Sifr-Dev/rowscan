@@ -574,12 +574,31 @@ pub fn fmt_num(value: f64) -> String {
     }
 }
 
+/// Escapes one field for a single GFM table cell.
+///
+/// A backslash always escapes the following character in GFM, so it must be
+/// escaped *before* the pipe: emitting only `\|` for a field that already ends
+/// in a backslash produced `\\|`, which GFM decodes as a literal backslash
+/// followed by a real cell delimiter. That split a single field across two
+/// columns and desynchronized every later cell in the row.
+fn escape_markdown_cell(cell: &str) -> String {
+    let mut escaped = String::with_capacity(cell.len());
+    for character in cell.chars() {
+        match character {
+            '\\' => escaped.push_str("\\\\"),
+            '|' => escaped.push_str("\\|"),
+            '\r' | '\n' => escaped.push_str("<br>"),
+            _ => escaped.push(character),
+        }
+    }
+    escaped
+}
+
 fn write_markdown_row(out: &mut impl Write, cells: &[String]) -> io::Result<()> {
     out.write_all(b"|")?;
     for cell in cells {
         out.write_all(b" ")?;
-        let escaped = cell.replace('|', "\\|").replace(['\r', '\n'], "<br>");
-        out.write_all(escaped.as_bytes())?;
+        out.write_all(escape_markdown_cell(cell).as_bytes())?;
         out.write_all(b" |")?;
     }
     out.write_all(b"\n")
@@ -597,5 +616,89 @@ mod tests {
         }
         assert_eq!(state.value("key", "sum").unwrap(), "1");
         assert_eq!(state.value("key", "avg").unwrap(), "0.3333333333333333");
+    }
+
+    #[test]
+    fn markdown_escapes_backslash_before_pipe() {
+        // A trailing backslash used to combine with the injected escape and
+        // emit `\\|`, which GFM reads as an escaped backslash plus a real
+        // delimiter that splits the field into a new column.
+        assert_eq!(escape_markdown_cell("c\\|d"), "c\\\\\\|d");
+        assert_eq!(escape_markdown_cell("back\\slash"), "back\\\\slash");
+        assert_eq!(escape_markdown_cell("a|b"), "a\\|b");
+        assert_eq!(escape_markdown_cell("trail\\"), "trail\\\\");
+        assert_eq!(escape_markdown_cell("line\nfeed"), "line<br>feed");
+        assert_eq!(escape_markdown_cell("cr\rret"), "cr<br>ret");
+        assert_eq!(escape_markdown_cell("plain κόσμε 🙂"), "plain κόσμε 🙂");
+    }
+
+    /// Decodes one GFM table row back into cells, following the CommonMark
+    /// rule that a backslash escapes the next ASCII punctuation character.
+    fn decode_markdown_row(row: &str) -> Vec<String> {
+        let row = row.strip_prefix('|').expect("row must start with '|'");
+        let row = row.strip_suffix('|').expect("row must end with '|'");
+        let mut cells = Vec::new();
+        let mut cell = String::new();
+        let mut characters = row.chars();
+        while let Some(character) = characters.next() {
+            match character {
+                '\\' => match characters.next() {
+                    Some(escaped) => cell.push(escaped),
+                    None => cell.push('\\'),
+                },
+                '|' => cells.push(std::mem::take(&mut cell)),
+                _ => cell.push(character),
+            }
+        }
+        cells.push(cell);
+        cells
+            .into_iter()
+            .map(|cell| {
+                let trimmed = cell.trim();
+                trimmed.replace("<br>", "\n")
+            })
+            .collect()
+    }
+
+    #[test]
+    fn markdown_rows_roundtrip_backslashes_pipes_and_newlines() {
+        // A deterministic corpus of adversarial cells: every field contains at
+        // least one structural character, and the surrounding cells are simple
+        // so a desync shows up as a shape mismatch rather than a value drift.
+        let corpus = [
+            "plain",
+            "a|b",
+            "c\\|d",
+            "c\\\\|d",
+            "back\\slash",
+            "trail\\",
+            "\\|",
+            "\\\\|",
+            "line\nfeed",
+            "cr\rret",
+            "both\r\n",
+            "|pipe|start",
+            "κόσμε🙂\\|x",
+            "a\\*b",
+            "tab\there",
+        ];
+        for (index, left) in corpus.iter().enumerate() {
+            for right in corpus.iter() {
+                let row = vec![(*left).to_string(), format!("{right}-{index}")];
+                let mut encoded = Vec::new();
+                write_markdown_row(&mut encoded, &row).unwrap();
+                let text = String::from_utf8(encoded).unwrap();
+                let decoded = decode_markdown_row(text.trim_end_matches('\n'));
+                assert_eq!(
+                    decoded.len(),
+                    row.len(),
+                    "cell count changed for {row:?}: {text:?}"
+                );
+                // CR and LF are both rendered as <br>, which decodes to '\n'.
+                let expected: Vec<String> =
+                    row.iter().map(|cell| cell.replace('\r', "\n")).collect();
+                assert_eq!(decoded, expected, "value drift for {row:?}: {text:?}");
+            }
+        }
     }
 }
