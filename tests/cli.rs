@@ -9,7 +9,13 @@ fn run(args: &[&str], input: &[u8]) -> std::process::Output {
         .stderr(Stdio::piped())
         .spawn()
         .unwrap();
-    child.stdin.take().unwrap().write_all(input).unwrap();
+    if let Err(error) = child.stdin.take().unwrap().write_all(input) {
+        assert_eq!(
+            error.kind(),
+            std::io::ErrorKind::BrokenPipe,
+            "stdin write failed: {error}"
+        );
+    }
     child.wait_with_output().unwrap()
 }
 
@@ -97,6 +103,70 @@ fn valid_cli_operations_preserve_csv_and_order() {
     let output = run(&["count"], input);
     assert!(output.status.success());
     assert_eq!(output.stdout, b"3\n");
+}
+
+#[test]
+fn markdown_cells_survive_backslashes_against_a_commonmark_decoder() {
+    // Regression: the writer escaped '|' but not the '\' in front of it, so a
+    // field containing a backslash immediately before a pipe emitted `\\|`.
+    // A GFM table then decodes that as a literal '\' plus a real delimiter and
+    // splits one field across two columns, corrupting the table shape.
+    // Backslash and pipe are not CSV metacharacters, so this needs no quoting:
+    // the fields are exactly `plain`, `a|b`, `c\|d`, `back\slash`, `trail\`.
+    let input = b"k,v
+plain,1
+a|b,2
+c\\|d,3
+back\\slash,4
+trail\\,5
+";
+    let output = run(&["--markdown"], input);
+    assert!(output.status.success(), "{output:?}");
+    let text = String::from_utf8(output.stdout).unwrap();
+
+    // Re-implement the CommonMark table-row decode: a backslash escapes the
+    // next character, and (in this writer's dialect) <br> is a newline.
+    fn decode(row: &str) -> Vec<String> {
+        let row = row.strip_prefix('|').unwrap().strip_suffix('|').unwrap();
+        let mut cells = Vec::new();
+        let mut cell = String::new();
+        let mut characters = row.chars();
+        while let Some(character) = characters.next() {
+            match character {
+                '\\' => cell.push(characters.next().unwrap_or('\\')),
+                '|' => cells.push(std::mem::take(&mut cell)),
+                _ => cell.push(character),
+            }
+        }
+        cells.push(cell);
+        cells
+            .into_iter()
+            .map(|cell| cell.trim().replace("<br>", "\n"))
+            .collect()
+    }
+
+    let rows: Vec<Vec<String>> = text
+        .lines()
+        .filter(|line| !line.trim().is_empty())
+        .map(decode)
+        .collect();
+    assert_eq!(rows[0], vec!["k".to_string(), "v".to_string()]);
+    assert_eq!(rows[1], vec!["---".to_string(), "---".to_string()]);
+    let body: Vec<Vec<String>> = rows[2..].to_vec();
+    assert!(
+        body.iter().all(|row| row.len() == 2),
+        "a field was split into extra columns: {body:?}"
+    );
+    assert_eq!(
+        body,
+        vec![
+            vec!["plain".to_string(), "1".to_string()],
+            vec!["a|b".to_string(), "2".to_string()],
+            vec!["c\\|d".to_string(), "3".to_string()],
+            vec!["back\\slash".to_string(), "4".to_string()],
+            vec!["trail\\".to_string(), "5".to_string()],
+        ]
+    );
 }
 
 #[cfg(unix)]
