@@ -1,9 +1,13 @@
 {
-  "name": "rowscan",
-  "description": "CSV/row query engine with group-by and finite-number checks",
+  "name": "Prism",
+  "displayName": "Prism",
+  "repo": "rowscan",
+  "description": "Zero-dependency streaming CSV query engine with filter, select, group-by and top-N",
+  "summary": "Queries CSV from a file or stdin with bounded field and record limits, exact numeric rules and CSV or Markdown output.",
   "stack": [
     "cargo"
   ],
   "status": "active",
-  "primary_language": "Rust"
+  "primary_language": "Rust",
+  "license": "MIT"
 }
