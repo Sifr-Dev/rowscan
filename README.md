@@ -1,8 +1,8 @@
 <div align="center">
 
-<img src="assets/banner.svg" alt="Prism — streaming CSV query engine" width="100%">
+<img src="assets/banner.svg" alt="rowscan — streaming CSV query engine" width="100%">
 
-# Prism
+# rowscan
 
 **Zero-dependency streaming CSV query engine: filter, select, group-by and top-N.**
 
@@ -16,19 +16,19 @@
 
 </div>
 
-> Prism (formerly `rowscan`) answers a question about a CSV file in one
+> rowscan (formerly `rowscan`) answers a question about a CSV file in one
 > streaming pass, with no dataframe library and no type guessing.
 
 ## What it is
 
-Prism is a CSV query tool written against the Rust standard library. It reads a
+rowscan is a CSV query tool written against the Rust standard library. It reads a
 file or stdin once, applies stages left to right — `filter`, `select`,
 `group-by`, `top`, `count` — and writes CSV (or a Markdown table). Fields are
 compared exactly; numeric operators only apply when both sides parse as finite
 `f64`. There is no schema inference, no joins and no SQL parser, by design.
 
 The crate and binary keep their original names, `sifr-query`; the product name
-is Prism and the repository is still `Sifr-Dev/rowscan`.
+is rowscan and the repository is still `Sifr-Dev/rowscan`.
 
 ## Current capabilities
 

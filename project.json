@@ -1,6 +1,6 @@
 {
-  "name": "Prism",
-  "displayName": "Prism",
+  "name": "rowscan",
+  "displayName": "rowscan",
   "repo": "rowscan",
   "description": "Zero-dependency streaming CSV query engine with filter, select, group-by and top-N",
   "summary": "Queries CSV from a file or stdin with bounded field and record limits, exact numeric rules and CSV or Markdown output.",
