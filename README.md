@@ -16,19 +16,18 @@
 
 </div>
 
-> rowscan (formerly `rowscan`) answers a question about a CSV file in one
+> rowscan answers a question about a CSV file in one
 > streaming pass, with no dataframe library and no type guessing.
 
 ## What it is
 
-rowscan is a CSV query tool written against the Rust standard library. It reads a
+This is a CSV query tool written against the Rust standard library. It reads a
 file or stdin once, applies stages left to right — `filter`, `select`,
 `group-by`, `top`, `count` — and writes CSV (or a Markdown table). Fields are
 compared exactly; numeric operators only apply when both sides parse as finite
 `f64`. There is no schema inference, no joins and no SQL parser, by design.
 
-The crate and binary keep their original names, `sifr-query`; the product name
-is rowscan and the repository is still `Sifr-Dev/rowscan`.
+The crate and binary are both named `sifr-query`.
 
 ## Current capabilities
 
@@ -164,7 +163,6 @@ not installed for this run.
 - Sorting full rows and streaming limit/offset stages.
 - Delimiter and encoding options.
 - A stable 1.0 CLI/output contract.
-- Binary rename to `prism` while keeping `sifr-query` working.
 
 ## License
 
