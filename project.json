@@ -1,0 +1,9 @@
+{
+  "name": "rowscan",
+  "description": "CSV/row query engine with group-by and finite-number checks",
+  "stack": [
+    "cargo"
+  ],
+  "status": "active",
+  "primary_language": "Rust"
+}

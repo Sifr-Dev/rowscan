@@ -1,0 +1,6 @@
+[toolchain]
+# Pinned so CI installs one immutable toolchain instead of chasing the moving
+# `stable` channel, whose manifest can change mid-download and trip a rustup
+# checksum mismatch. Bump deliberately, not implicitly.
+channel = "1.100.0"
+components = ["rustfmt", "clippy"]
